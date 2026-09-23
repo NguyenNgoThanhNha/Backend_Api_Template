@@ -10,7 +10,7 @@ Tất cả được sắp theo **Clean Architecture**.
 - 📐 **Luật bắt buộc:** [RULES.md](RULES.md)
 - 📘 **Giải thích chi tiết:** `Roadmap/projects/00-Chuan-Backend-DotNet.md`
 - 🧪 **Ví dụ có nghiệp vụ thật:** `Projects/Helpdesk-Ticketing/backend`
-- 🗃️ **Template cũ (v1)** vẫn còn nguyên trong thư mục [`legacy/`](legacy) và trên nhánh `main`, để tham khảo các phần v2 chưa port (Microsoft Graph email, OneSignal, device, Azure Blob…).
+- 🗃️ **Template cũ (v1)** nằm riêng trên nhánh **`v1-legacy`** (`git checkout v1-legacy`), để tham khảo các phần v2 chưa port (Microsoft Graph email, OneSignal, device, Azure Blob…). Nhánh `main` chỉ chứa v2.
 
 ## Có sẵn gì
 
