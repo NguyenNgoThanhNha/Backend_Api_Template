@@ -1,0 +1,19 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ServerApiTemplate.Domain.Constants;
+using ServerApiTemplate.Domain.Entities.Sys;
+
+namespace ServerApiTemplate.Persistence.Configurations.Sys;
+
+public class SysRefreshTokenConfiguration : IEntityTypeConfiguration<SysRefreshToken>
+{
+    public void Configure(EntityTypeBuilder<SysRefreshToken> builder)
+    {
+        builder.ToTable(ConstTable.RefreshToken);
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.TokenHash).HasColumnType("varchar(64)").IsRequired();
+        builder.Property(x => x.ReplacedByTokenHash).HasColumnType("varchar(64)");
+        builder.HasIndex(x => x.TokenHash).IsUnique();
+        builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

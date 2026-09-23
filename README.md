@@ -1,171 +1,71 @@
-# 🚀 ServerApiTemplate
+# 🚀 ServerApiTemplate (v2 — chuẩn thống nhất)
 
-ServerApiTemplate là một template dành cho các dự án ASP.NET Core API, giúp bạn khởi tạo nhanh chóng một API server với cấu trúc chuẩn.
+Template ASP.NET Core Web API dùng chung cho các dự án backend .NET. Bản v2 gộp các nguồn sau:
+- Template cũ: phân quyền 6 bảng `Sys_*`, `BaseEntity` có audit và xóa mềm, UnitOfWork có helper gọi stored procedure, lớp `Const*`.
+- Convention CQRS + `IUnitOfWork<TContext>`.
+- Cách log API của VAS_CRM_BE.
 
-## 📋 Mục lục
+Tất cả được sắp theo **Clean Architecture**.
 
-- [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
-- [Cài đặt](#cài-đặt)
-- [Cấu hình dự án](#cấu-hình-dự-án)
-- [Chạy dự án](#chạy-dự-án)
-- [Cấu trúc dự án](#cấu-trúc-dự-án)
-- [Đóng góp](#đóng-góp)
+- 📐 **Luật bắt buộc:** [RULES.md](RULES.md)
+- 📘 **Giải thích chi tiết:** `Roadmap/projects/00-Chuan-Backend-DotNet.md`
+- 🧪 **Ví dụ có nghiệp vụ thật:** `Projects/Helpdesk-Ticketing/backend`
+- 🗃️ **Template cũ (v1)** vẫn còn nguyên trong thư mục [`legacy/`](legacy) và trên nhánh `main`, để tham khảo các phần v2 chưa port (Microsoft Graph email, OneSignal, device, Azure Blob…).
 
-## 🛠️ Yêu cầu hệ thống
+## Có sẵn gì
 
-- .NET Core 6.0 hoặc cao hơn
-- Visual Studio 2022 hoặc Visual Studio Code
-- [PowerToys](https://github.com/microsoft/PowerToys) (khuyến nghị cho việc đổi tên hàng loạt)
+| Nhóm | Nội dung |
+|---|---|
+| Kiến trúc | Domain / Persistence / Application / Infrastructure / Api · MediatR 12 (ValidationBehavior, LoggingBehavior) · FluentValidation · Mapster |
+| Dữ liệu | EF Core + SQL Server · `IUnitOfWork<TContext>` + `IRepository<,>` (open generic, Scoped) · `ExecuteStoreProcedureGetMultiTables` + `ToDataSetSimpleRead().TryRead<T>()` · `BaseEntity` audit tự động + xóa mềm + global query filter · migration + `DesignTimeDbContextFactory` |
+| Auth | JWT access token (15') + refresh token rotation (phát hiện dùng lại token) · quên/đặt lại mật khẩu · rate limit `auth/*` |
+| Phân quyền | 6 bảng `Sys_Account, Sys_Role, Sys_Activity, Sys_UserRole, Sys_RoleActivity, Sys_UserActivity` · phân quyền **theo role và theo từng tài khoản** (C/R/U/D) · `[HasPermission]` policy động · cache có invalidate · API quản trị role/quyền đầy đủ |
+| Log & debug | Serilog (console + file theo ngày, enrich UserId/TraceId) · **log API request/response vào `Sys_LogApi`** (ghi nền theo lô, che mật khẩu/token, tra theo `traceId`) · `LoggingDelegatingHandler` cho HttpClient |
+| Lỗi | ProblemDetails (RFC 9457) có `traceId` · ánh xạ exception → 400/401/403/404/409/500 |
+| Khác | Swagger + JWT · health check `/health` · CORS theo config · Dockerfile · JSON camelCase, enum string, DateTime UTC có `Z` |
+| Test | Unit (xUnit + NSubstitute + `TestDb` InMemory) · Integration (`WebApplicationFactory` + Testcontainers hoặc SQL local) |
 
-## 📥 Cài đặt
+## Tạo dự án mới từ template
 
-### Bước 1: Tải source code
+1. Copy repo (clone, hoặc tải ZIP của nhánh này).
+2. Đổi tên: dùng PowerToys **PowerRename** trên thư mục, Search `ServerApiTemplate` → Replace `TenDuAn` (áp dụng cho file và thư mục). Sau đó Find & Replace toàn solution nội dung `ServerApiTemplate` → `TenDuAn`.
+3. Xóa migration cũ và tạo lại:
 
-Bạn có thể tải source code bằng một trong hai cách sau:
+   ```bash
+   dotnet ef migrations add InitialCreate -p src/TenDuAn.Persistence -s src/TenDuAn.Persistence
+   ```
 
-#### Cách 1: Clone từ GitHub
-```bash
-git clone https://github.com/your-username/ServerApiTemplate.git
-cd ServerApiTemplate
-```
+4. Sửa `appsettings.Development.json` (connection string, `Seed:AdminEmail/AdminPassword`) và `ConstActivity.ApplicationName`.
+5. Viết nghiệp vụ theo mục **"Thêm một feature mới"** trong [RULES.md](RULES.md).
 
-#### Cách 2: Download ZIP
-1. Truy cập [GitHub repository](https://github.com/your-username/ServerApiTemplate)
-2. Bấm vào nút **Code** → **Download ZIP**
-3. Giải nén file về máy
-
-### Bước 2: Đổi tên dự án
-
-> **Lưu ý:** Cần cài đặt [PowerToys](https://apps.microsoft.com/store/detail/microsoft-powertoys/XP89DCGQ3K6VLD) để sử dụng PowerRename
-
-1. Chuột phải vào thư mục dự án đã tải về
-2. Chọn **PowerRename**
-3. Trong ô **"Search for"**: nhập `ServerApiTemplate`
-4. Trong ô **"Replace with"**: nhập tên dự án mới (ví dụ: `MyCoolApi`)
-5. Nhấn **Apply** để rename tất cả file, folder và class
-
-### Bước 3: Cập nhật nội dung trong solution
-
-1. Mở file `.sln` đã được rename trong Visual Studio (ví dụ: `MyCoolApi.sln`)
-2. Nhấn `Ctrl + Shift + F` để mở Find and Replace
-3. Điền thông tin:
-   - **Find what**: `ServerApiTemplate`
-   - **Replace with**: `MyCoolApi` (tên dự án của bạn)
-   - **Look in**: `Entire Solution`
-4. Nhấn **Replace All**
-
-> ✅ Thao tác này sẽ tự động cập nhật namespace, config, class name và các tham chiếu khác trong source code.
-
-## 🚀 Chạy dự án
-
-### Build và khởi chạy
-
-1. Build solution: `Ctrl + Shift + B`
-2. Chạy dự án: Nhấn nút ▶️ hoặc `F5`
-3. Mở trình duyệt và truy cập: `https://localhost:5001/swagger`
-
-### Sử dụng Command Line
+## Chạy
 
 ```bash
-# Build dự án
-dotnet build
-
-# Chạy dự án
-dotnet run
-
-# Hoặc chạy với watch mode (tự động reload khi có thay đổi)
-dotnet watch run
+dotnet run --project src/ServerApiTemplate.Api
 ```
 
-## 📁 Cấu trúc dự án
+Swagger ở http://localhost:5080/swagger. Môi trường Development tự migrate và seed: activity, role Admin/User, và tài khoản `admin@local.dev` / `Admin@123`.
 
-```
-ServerApiTemplate/
-├── .idea/                    # JetBrains IDE configuration
-├── .vs/                      # Visual Studio configuration
-├── CommonLibrary/            # Thư viện chung, utilities
-├── DomainService/           # Business logic và domain services
-├── Infrastructure/          # Data access, external services
-├── Model/                   # Data models và entities
-├── ServerApi/               # Main API project
-├── .gitignore              # Git ignore file
-├── ServerApi.sln           # Visual Studio Solution file
-└── README.md               # Tài liệu dự án
+```bash
+dotnet test tests/ServerApiTemplate.UnitTests
 ```
 
-## 🏗️ Kiến trúc dự án
+```bash
+TEST_SQL_CONNECTION="Server=.\MSSQLSERVER01;Trusted_Connection=True;TrustServerCertificate=True" dotnet test tests/ServerApiTemplate.IntegrationTests
+```
 
-Dự án được tổ chức theo mô hình **Clean Architecture** với các layer rõ ràng:
+(Không đặt `TEST_SQL_CONNECTION` thì integration test tự dùng Testcontainers, cần Docker.)
 
-### 🔹 **ServerApi** 
-- Main API project chứa Controllers, Middlewares
-- Entry point của ứng dụng (Program.cs, Startup.cs)
-- API endpoints và Swagger configuration
+## API có sẵn
 
-### 🔹 **Model** 
-- Data Transfer Objects (DTOs)
-- Request/Response models
-- Validation attributes
-
-### 🔹 **DomainService**
-- Business logic và domain services
-- Application services layer
-- Domain entities và business rules
-
-### 🔹 **Infrastructure**
-- Data access layer (Repository pattern)
-- Database context và configurations
-- External service integrations
-- Caching, logging implementations
-
-### 🔹 **CommonLibrary**
-- Shared utilities và helper methods
-- Extension methods
-- Common constants và enums
-- Cross-cutting concerns
-
-- ✅ Swagger/OpenAPI documentation
-- ✅ Entity Framework Core integration
-- ✅ Dependency Injection container
-- ✅ Logging configuration
-- ✅ CORS policy setup
-- ✅ Health checks
-- ✅ Exception handling middleware
-
-## 🔧 Các tính năng có sẵn
-
-Dự án đã được cấu hình sẵn các biện pháp bảo mật cơ bản:
-- HTTPS redirect
-- Security headers
-- Input validation
-- Rate limiting (nếu có)
-
-## 📚 Tài liệu tham khảo
-
-- [ASP.NET Core Documentation](https://docs.microsoft.com/en-us/aspnet/core/)
-- [Entity Framework Core](https://docs.microsoft.com/en-us/ef/core/)
-- [Swagger/OpenAPI](https://swagger.io/docs/)
-
-## 🤝 Đóng góp
-
-Chúng tôi hoan nghênh mọi đóng góp! Vui lòng:
-
-1. Fork repository này
-2. Tạo feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Tạo Pull Request
-
-## 📝 License
-
-Dự án này được phân phối dưới giấy phép MIT. Xem file [LICENSE](LICENSE) để biết thêm chi tiết.
-
-## 📞 Liên hệ
-
-- **Email**: your-email@example.com
-- **GitHub**: [@your-username](https://github.com/your-username)
-- **LinkedIn**: [Your Name](https://linkedin.com/in/your-profile)
-
----
-
-⭐ Nếu template này hữu ích cho bạn, hãy cho chúng tôi một star nhé!
+```text
+POST /api/v1/auth/register | login | refresh | logout | forgot-password | reset-password
+GET  /api/v1/auth/me                                   → user + roles + quyền hiệu lực (cho FE ẩn/hiện)
+GET  /api/v1/activities                                [ROLE:R | USER:R]
+GET|POST /api/v1/roles · GET|PUT|DELETE /api/v1/roles/{id}         [ROLE:*]
+GET  /api/v1/users · PATCH /api/v1/users/{id}          [USER:R/U]
+PUT  /api/v1/users/{id}/roles                          [USER:U]
+GET|PUT /api/v1/users/{id}/permissions                 [USER:R/U]  (quyền riêng từng tài khoản)
+GET  /api/v1/api-logs · /api/v1/api-logs/{id}          [API_LOG:R] (debug)
+GET  /health
+```
