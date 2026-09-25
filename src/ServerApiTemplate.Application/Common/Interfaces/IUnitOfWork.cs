@@ -22,8 +22,14 @@ public interface IUnitOfWork<TContext> where TContext : DbContext
     /// <summary>Raw SQL trả về một bảng, map theo tên cột.</summary>
     Task<List<T>> RawSqlQueryAsync<T>(string querySql, params SqlParameter[] parameters);
 
-    /// <summary>Gọi stored procedure trả nhiều bảng. Key Hashtable có tiền tố '@', tên SP dạng [dbo].[usp_X].</summary>
+    /// <summary>Gọi stored procedure trả nhiều bảng (đồng bộ — giữ để tương thích template cũ; code mới dùng bản Async).</summary>
     DataSet ExecuteStoreProcedureGetMultiTables(string storeProcedure, Hashtable data);
+
+    /// <summary>
+    /// Bản async của <see cref="ExecuteStoreProcedureGetMultiTables"/> — ƯU TIÊN dùng trong handler (RULES 3.7):
+    /// không giữ thread pool trong lúc chờ SQL. Key Hashtable có tiền tố '@', tên SP dạng [dbo].[usp_X].
+    /// </summary>
+    Task<DataSet> ExecuteStoreProcedureGetMultiTablesAsync(string storeProcedure, Hashtable data, CancellationToken cancellationToken = default);
 }
 
 public interface IRepository<TEntity, TContext>

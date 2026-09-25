@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using System.IO.Compression;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
 using ServerApiTemplate.Api.Authorization;
 using ServerApiTemplate.Api.Controllers.V1;
 using ServerApiTemplate.Api.Infrastructure;
@@ -40,6 +42,17 @@ builder.Services.AddControllers()
         o.JsonSerializerOptions.DictionaryKeyPolicy = System.Text.Json.JsonNamingPolicy.CamelCase; // key trong errors (kể cả lỗi binding tự động) luôn camelCase
     });
 builder.Services.AddProblemDetails();
+
+// Nén response JSON (Brotli ưu tiên, Gzip dự phòng). Fastest: nén ~80% JSON mà gần như không tốn CPU.
+builder.Services.AddResponseCompression(o =>
+{
+    o.EnableForHttps = true;
+    o.Providers.Add<BrotliCompressionProvider>();
+    o.Providers.Add<GzipCompressionProvider>();
+    o.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["application/problem+json"]);
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddHealthChecks().AddDbContextCheck<ServerApiTemplateDbContext>();
 
@@ -104,7 +117,10 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // ---------- Pipeline ----------
-app.UseApiLogging();            // ngoài cùng → ghi được cả response lỗi do exception handler sinh ra
+// Nén đứng NGOÀI api logging (log ghi JSON gốc, không phải byte đã nén) và KHÔNG nén /auth/* —
+// response có token + nén HTTPS = rủi ro BREACH (RULES 8.8).
+app.UseWhen(ctx => !ctx.Request.Path.StartsWithSegments("/api/v1/auth"), branch => branch.UseResponseCompression());
+app.UseApiLogging();            // ngay sau nén → ghi được cả response lỗi do exception handler sinh ra
 app.UseExceptionHandler();
 app.UseStatusCodePages();       // 401/403/404 rỗng → ProblemDetails
 app.UseSerilogRequestLogging();

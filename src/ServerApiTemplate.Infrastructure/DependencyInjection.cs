@@ -1,4 +1,5 @@
 using ServerApiTemplate.Application.Common.Interfaces;
+using ServerApiTemplate.Infrastructure.BackgroundJobs;
 using ServerApiTemplate.Infrastructure.Commons;
 using ServerApiTemplate.Infrastructure.Logging;
 using ServerApiTemplate.Infrastructure.Security;
@@ -19,6 +20,7 @@ public static class DependencyInjection
     {
         services.AddSingleton(TimeProvider.System);
         services.AddMemoryCache();
+        services.AddHybridCache(); // cache số liệu tổng hợp (RULES 3.12); thêm AddStackExchangeRedisCache để có L2 khi chạy nhiều instance
 
         // --- Data: DbContext + audit interceptor + UnitOfWork (open generic, Scoped — chuẩn BE §5) ---
         services.AddScoped<AuditSaveChangesInterceptor>();
@@ -54,6 +56,7 @@ public static class DependencyInjection
         {
             services.AddHostedService<ApiLogWriterService>();
             services.AddHostedService<ApiLogCleanupService>();
+            services.AddHostedService<DataRetentionService>();
         }
 
         return services;

@@ -14,6 +14,7 @@ public class SysRefreshTokenConfiguration : IEntityTypeConfiguration<SysRefreshT
         builder.Property(x => x.TokenHash).HasColumnType("varchar(64)").IsRequired();
         builder.Property(x => x.ReplacedByTokenHash).HasColumnType("varchar(64)");
         builder.HasIndex(x => x.TokenHash).IsUnique();
+        builder.HasIndex(x => x.ExpiresAt); // job dọn token hết hạn (DataRetention)
         builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

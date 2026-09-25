@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ServerApiTemplate.Application.Common;
 using ServerApiTemplate.Application.Common.Behaviors;
 using ServerApiTemplate.Application.Features.V1.Auth.Services;
+using ServerApiTemplate.Application.Features.V1.Maintenance.Commands.PurgeExpiredData;
 
 namespace ServerApiTemplate.Application;
 
@@ -25,6 +26,7 @@ public static class DependencyInjection
         TypeAdapterConfig.GlobalSettings.Scan(assembly);
 
         services.Configure<AppOptions>(configuration.GetSection(AppOptions.SectionName));
+        services.Configure<DataRetentionOptions>(configuration.GetSection(DataRetentionOptions.SectionName));
 
         // Service dùng chung trong Application (đăng ký tay, Scoped).
         services.AddScoped<IAuthTokenIssuer, AuthTokenIssuer>();

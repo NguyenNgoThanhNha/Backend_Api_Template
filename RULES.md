@@ -37,11 +37,12 @@ Mức độ: **[BẮT BUỘC]** = vi phạm thì không merge · **[NÊN]** = l�
 | 3.4 | **[BẮT BUỘC]** Query chỉ đọc dùng `AsNoTracking()` + projection `Select` sang DTO. **Không** `Include` rồi map trong bộ nhớ ở màn danh sách. Có nhiều collection thì tách thành nhiều query projection. |
 | 3.5 | **[BẮT BUỘC]** Không N+1: không query DB trong vòng lặp `foreach` theo từng dòng. Kiểm tra bằng SQL log (`Microsoft.EntityFrameworkCore.Database.Command = Information` ở Development). |
 | 3.6 | **[BẮT BUỘC]** Phân trang dùng `PagedQuery` + `PagedResult<T>.CreateAsync` (`pageSize` ≤ 100). Không trả danh sách không giới hạn. |
-| 3.7 | **[BẮT BUỘC]** Stored procedure chỉ gọi qua `unitOfWork.ExecuteStoreProcedureGetMultiTables("[dbo].[usp_X]", new Hashtable { ["@Param"] = v })`, đọc bằng `.ToDataSetSimpleRead().TryRead<T>()`. SP được tạo bằng migration (`migrationBuilder.Sql`), không tạo tay trên DB. |
+| 3.7 | **[BẮT BUỘC]** Stored procedure chỉ gọi qua `await unitOfWork.ExecuteStoreProcedureGetMultiTablesAsync(` (bản async, ưu tiên trong handler; bản đồng bộ `ExecuteStoreProcedureGetMultiTables(` chỉ để tương thích code cũ) — ví dụ `ExecuteStoreProcedureGetMultiTablesAsync("[dbo].[usp_X]", new Hashtable { ["@Param"] = v })`, đọc bằng `.ToDataSetSimpleRead().TryRead<T>()`. SP được tạo bằng migration (`migrationBuilder.Sql`), không tạo tay trên DB. |
 | 3.8 | **[BẮT BUỘC]** Không nối chuỗi SQL với input người dùng. Raw SQL phải dùng `SqlParameter`. |
 | 3.9 | **[BẮT BUỘC]** EF không dịch được `OrderBy`/`Where` trên record DTO tạo trong `Select`. Muốn sắp xếp/lọc trên kết quả group thì project ra anonymous type trước, `ToListAsync`, rồi mới map sang DTO. |
 | 3.10 | **[BẮT BUỘC]** Stored procedure cho màn danh sách lọc động phải: (a) dùng **dynamic SQL có tham số** `sp_executesql`, chỉ ghép điều kiện được truyền vào, `ORDER BY` lấy từ whitelist; **không** `SELECT` toàn bộ dòng vào bảng tạm rồi mới phân trang (đã đo: chậm hơn LINQ gấp 8 lần). (b) Tự lọc `IsDeleted = 0` trên mọi bảng, vì SP không có global query filter của EF. (c) Escape `[ % _` khi dùng `LIKE`. (d) Trả bảng 1 là `TotalCount`, bảng 2 là dữ liệu trang. (e) File `.sql` đặt ở `Persistence/Sql/` (EmbeddedResource, `CREATE OR ALTER`) và cài bằng migration gọi `SqlScripts.Read(...)`. (f) Có integration test chạy SP trên SQL Server thật. Mẫu: `usp_Ticket_Search`, `usp_Report_Summary` trong Helpdesk. |
 | 3.11 | **[BẮT BUỘC]** Trước khi chuyển một query sang SP hoặc thêm/sửa index phải **đo trên dữ liệu lớn** (≥ vài chục nghìn dòng), cả trước lẫn sau, rồi giữ cách nhanh hơn. Không tối ưu theo cảm tính. |
+| 3.12 | **[BẮT BUỘC]** Số liệu tổng hợp tốn kém và **giống nhau cho mọi người xem** (dashboard, báo cáo) phải cache bằng `HybridCache.GetOrCreateAsync`, với key có đủ tham số (vd khoảng ngày) và thời hạn cấu hình được (`Reports:CacheSeconds`). HybridCache chống stampede: nhiều request cùng lúc chỉ chạy query một lần. **Không** cache dữ liệu phụ thuộc quyền/người dùng bằng key chung. DTO cache nên đánh `[ImmutableObject(true)]`. Số đo: báo cáo 365 ngày giảm từ 268 ms xuống 4 ms. |
 
 ## 4. Entity, database, migration
 
@@ -57,6 +58,7 @@ Mức độ: **[BẮT BUỘC]** = vi phạm thì không merge · **[NÊN]** = l�
 | 4.8 | **[NÊN]** Entity có nghiệp vụ dùng setter `private` + method domain (xem `Ticket` trong Helpdesk). Bảng hệ thống / bảng đơn giản được phép dùng setter public. |
 | 4.9 | **[BẮT BUỘC]** Entity tự quyết định người tạo (bảng lịch sử, "Hệ thống" = null) phải implement `IExplicitCreator`. |
 | 4.10 | **[BẮT BUỘC]** Index phục vụ query EF trên bảng xóa mềm phải chứa `IsDeleted`, bằng `INCLUDE` hoặc filtered index `WHERE [IsDeleted] = 0`. Mọi query EF đều có điều kiện này (global filter); nếu index thiếu cột, SQL phải key lookup từng dòng. Ví dụ đo được: auto-assign 50–90 ms, còn 20 ms sau khi thêm `IsDeleted` vào `INCLUDE`. |
+| 4.11 | **[BẮT BUỘC]** Bảng kỹ thuật tăng mãi (refresh token, thông báo, OTP, log...) phải có **hạn lưu** cấu hình được (`DataRetention:*`) và được dọn bằng `PurgeExpiredDataCommand`, job `DataRetentionService` chạy mỗi ngày. Đây là ngoại lệ của 4.2: dữ liệu kỹ thuật hết hạn được **xóa cứng** bằng `ExecuteDeleteAsync` + `IgnoreQueryFilters()`, theo lô ≤ 4000 dòng để không bị lock escalation, và phải có index trên cột ngày dùng để lọc. |
 
 ## 5. Phân quyền 6 bảng
 
@@ -94,12 +96,13 @@ Mức độ: **[BẮT BUỘC]** = vi phạm thì không merge · **[NÊN]** = l�
 | # | Quy tắc |
 |---|---|
 | 8.1 | **[BẮT BUỘC]** Log qua `ILogger<T>` (Serilog) với **message template**: `logger.LogInformation("Order {OrderId} created", id)`. Không nối chuỗi, không `Console.WriteLine`. |
-| 8.2 | **[BẮT BUỘC]** Không tắt `ApiLoggingMiddleware`. Nó phải đứng **đầu pipeline**, bọc ngoài `UseExceptionHandler`. |
+| 8.2 | **[BẮT BUỘC]** Không tắt `ApiLoggingMiddleware`. Nó phải đứng **đầu pipeline** (chỉ sau `UseResponseCompression`, xem 8.8), bọc ngoài `UseExceptionHandler`. |
 | 8.3 | **[BẮT BUỘC]** API nhận hoặc trả dữ liệu nhạy cảm mới (mật khẩu, OTP, token, số thẻ...) thì thêm tên field vào `ApiLogging:SensitiveFields`. |
 | 8.4 | **[NÊN]** API polling hoặc trả payload lớn thì thêm vào `ApiLogging:ExcludedPaths`. |
 | 8.5 | **[BẮT BUỘC]** `HttpClient` gọi hệ thống ngoài phải gắn `.AddHttpMessageHandler<LoggingDelegatingHandler>()`. |
 | 8.6 | **[BẮT BUỘC]** Không log mật khẩu, token hay dữ liệu cá nhân nhạy cảm ở bất kỳ level nào. |
 | 8.7 | Quy trình debug: lấy `traceId` trong ProblemDetails → `GET /api/v1/api-logs?traceId=...` → xem request/response → tìm tiếp `traceId` đó trong `logs/*.log` để xem stack trace. |
+| 8.8 | **[BẮT BUỘC]** Bật nén response (Brotli + Gzip, `CompressionLevel.Fastest`). `UseResponseCompression` đứng **ngoài** `UseApiLogging`, để log ghi JSON gốc chứ không phải byte đã nén. **Không** nén các endpoint trả token hoặc bí mật (`/api/v1/auth/*`), vì nén + HTTPS dính rủi ro BREACH. Số đo: danh sách 100 ticket 43,9 KB → 4 KB. |
 
 ## 9. Dependency Injection
 
@@ -141,6 +144,7 @@ Mức độ: **[BẮT BUỘC]** = vi phạm thì không merge · **[NÊN]** = l�
 [ ] Không chuỗi mã nghiệp vụ trần; cấu hình qua IOptions
 [ ] Đổi schema có migration
 [ ] Field nhạy cảm mới đã thêm vào ApiLogging:SensitiveFields
+[ ] Bảng kỹ thuật mới (token/OTP/log/thông báo) có hạn lưu trong PurgeExpiredDataCommand; số liệu tổng hợp dùng chung có HybridCache
 [ ] Unit test cho rule mới; integration test case 403
 [ ] dotnet build 0 error, dotnet test xanh
 ```
