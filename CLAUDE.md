@@ -13,6 +13,8 @@ Tóm tắt những điều hay bị vi phạm:
 - Field nhạy cảm mới → thêm vào `ApiLogging:SensitiveFields`.
 - SP gọi bằng `ExecuteStoreProcedureGetMultiTablesAsync`; index trên bảng xóa mềm phải INCLUDE `IsDeleted`; tối ưu phải có số đo trước–sau.
 - Bảng kỹ thuật tăng mãi → thêm vào `PurgeExpiredDataCommand`; số liệu tổng hợp dùng chung → `HybridCache`.
+- Tìm chữ trong danh sách: dùng cột chuẩn hóa (`SearchNormalizer`, collation `Latin1_General_100_BIN2`) + `OPTION (RECOMPILE)`; điều kiện đắt tiền trong OR bọc `CASE` lồng nhau (RULES 3.13).
+- Sửa file bằng Edit/Write hoặc Node. **Không** dùng `Get-Content`/`Set-Content` của PowerShell 5.1 để ghi lại file: nó phá UTF-8 tiếng Việt thành mojibake.
 
 Lệnh thường dùng:
 

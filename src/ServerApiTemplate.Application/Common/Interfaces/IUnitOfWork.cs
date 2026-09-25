@@ -22,6 +22,12 @@ public interface IUnitOfWork<TContext> where TContext : DbContext
     /// <summary>Raw SQL trả về một bảng, map theo tên cột.</summary>
     Task<List<T>> RawSqlQueryAsync<T>(string querySql, params SqlParameter[] parameters);
 
+    /// <summary>
+    /// Raw SQL ghi (UPDATE/DELETE hàng loạt) — placeholder {0}, {1}… được EF chuyển thành tham số (an toàn injection).
+    /// KHÔNG đi qua SaveChanges/interceptor → chỉ dùng cho tác vụ kỹ thuật (backfill, bảo trì), không cho nghiệp vụ.
+    /// </summary>
+    Task<int> ExecuteSqlRawAsync(string sql, IEnumerable<object> parameters, CancellationToken cancellationToken = default);
+
     /// <summary>Gọi stored procedure trả nhiều bảng (đồng bộ — giữ để tương thích template cũ; code mới dùng bản Async).</summary>
     DataSet ExecuteStoreProcedureGetMultiTables(string storeProcedure, Hashtable data);
 

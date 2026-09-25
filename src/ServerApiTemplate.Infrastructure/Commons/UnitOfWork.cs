@@ -28,6 +28,9 @@ public sealed class UnitOfWork<TContext>(TContext context, IServiceProvider serv
     public Task<List<T>> RawSqlQueryAsync<T>(string querySql, params SqlParameter[] parameters) =>
         context.Database.SqlQueryRaw<T>(querySql, parameters.Cast<object>().ToArray()).ToListAsync();
 
+    public Task<int> ExecuteSqlRawAsync(string sql, IEnumerable<object> parameters, CancellationToken cancellationToken = default) =>
+        context.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken);
+
     public DataSet ExecuteStoreProcedureGetMultiTables(string storeProcedure, Hashtable data)
     {
         var dataSet = new DataSet();

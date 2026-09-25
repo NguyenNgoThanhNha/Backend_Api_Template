@@ -43,6 +43,7 @@ Mức độ: **[BẮT BUỘC]** = vi phạm thì không merge · **[NÊN]** = l�
 | 3.10 | **[BẮT BUỘC]** Stored procedure cho màn danh sách lọc động phải: (a) dùng **dynamic SQL có tham số** `sp_executesql`, chỉ ghép điều kiện được truyền vào, `ORDER BY` lấy từ whitelist; **không** `SELECT` toàn bộ dòng vào bảng tạm rồi mới phân trang (đã đo: chậm hơn LINQ gấp 8 lần). (b) Tự lọc `IsDeleted = 0` trên mọi bảng, vì SP không có global query filter của EF. (c) Escape `[ % _` khi dùng `LIKE`. (d) Trả bảng 1 là `TotalCount`, bảng 2 là dữ liệu trang. (e) File `.sql` đặt ở `Persistence/Sql/` (EmbeddedResource, `CREATE OR ALTER`) và cài bằng migration gọi `SqlScripts.Read(...)`. (f) Có integration test chạy SP trên SQL Server thật. Mẫu: `usp_Ticket_Search`, `usp_Report_Summary` trong Helpdesk. |
 | 3.11 | **[BẮT BUỘC]** Trước khi chuyển một query sang SP hoặc thêm/sửa index phải **đo trên dữ liệu lớn** (≥ vài chục nghìn dòng), cả trước lẫn sau, rồi giữ cách nhanh hơn. Không tối ưu theo cảm tính. |
 | 3.12 | **[BẮT BUỘC]** Số liệu tổng hợp tốn kém và **giống nhau cho mọi người xem** (dashboard, báo cáo) phải cache bằng `HybridCache.GetOrCreateAsync`, với key có đủ tham số (vd khoảng ngày) và thời hạn cấu hình được (`Reports:CacheSeconds`). HybridCache chống stampede: nhiều request cùng lúc chỉ chạy query một lần. **Không** cache dữ liệu phụ thuộc quyền/người dùng bằng key chung. DTO cache nên đánh `[ImmutableObject(true)]`. Số đo: báo cáo 365 ngày giảm từ 268 ms xuống 4 ms. |
+| 3.13 | **[BẮT BUỘC]** Tìm chuỗi con (`LIKE '%x%'`) trên cột văn bản lớn: không LIKE trực tiếp theo collation ngôn ngữ (tốn CPU, ~250 ms / 50k dòng). Thay vào đó lưu một cột **đã chuẩn hóa** (`SearchNormalizer`: chữ thường, bỏ dấu tiếng Việt, đ→d) với collation `Latin1_General_100_BIN2`, và chuẩn hóa từ khóa theo cùng cách. Được thêm lợi ích "gõ không dấu vẫn tìm ra". Trong dynamic SQL, truy vấn có tìm chữ phải thêm `OPTION (RECOMPILE)`: nếu không, plan của từ khóa phổ biến bị dùng lại cho từ khóa hiếm và mất 1,4–1,8 s. Điều kiện fallback đắt tiền phải bọc trong **`CASE` lồng nhau**, vì `OR`/`AND` không đảm bảo thứ tự đánh giá. Cần Full-Text Search thật thì phải cài tính năng FTS (quyết định hạ tầng). |
 
 ## 4. Entity, database, migration
 
@@ -130,6 +131,18 @@ Mức độ: **[BẮT BUỘC]** = vi phạm thì không merge · **[NÊN]** = l�
 | 11.1 | **[BẮT BUỘC]** Trace code trước khi kết luận nguyên nhân, không sửa mò. Chưa đủ dữ kiện thì thêm log truy vết rồi báo. |
 | 11.2 | **[NÊN]** Ưu tiên patch nhỏ nhất, tái sử dụng helper/service có sẵn. Không rewrite kiến trúc, không đổi API contract nếu không có yêu cầu. |
 | 11.3 | **[BẮT BUỘC]** Không đổi phiên bản package lớn (major) trong PR sửa lỗi. Nâng package làm PR riêng. |
+
+
+## 12. Realtime (SignalR) — khi dự án có thông báo/cập nhật thời gian thực
+
+| # | Quy tắc |
+|---|---|
+| 12.1 | **[BẮT BUỘC]** Handler **không** gọi SignalR trực tiếp. Chỉ xếp hàng vào `IRealtimeOutbox` (notification, ticketChanged...). `RealtimeDispatchBehavior` gửi đi **sau khi handler chạy xong không lỗi** (đã SaveChanges), nên client không bao giờ nhận sự kiện của dữ liệu chưa lưu hoặc đã rollback. Lỗi gửi realtime chỉ log, không làm hỏng request. |
+| 12.2 | **[BẮT BUỘC]** Hub mỏng như controller: `[Authorize]`, kiểm quyền qua Mediator (vd `CheckTicketAccessQuery`) trước khi `Groups.AddToGroupAsync`. Không đủ quyền thì `throw new HubException("forbidden")`. Tên hub/event/group khai trong `ConstRealtime`. |
+| 12.3 | **[BẮT BUỘC]** Token SignalR đi qua query `access_token`: `JwtBearerEvents.OnMessageReceived` **chỉ** nhận token này trên path `/hubs/*`, và `/hubs` phải nằm trong `ApiLogging:ExcludedPaths` để token không bị ghi vào log. Định danh user theo claim `sub` (`IUserIdProvider`). |
+| 12.4 | **[BẮT BUỘC]** Payload realtime cùng chuẩn với REST: camelCase, thời gian UTC có `Z` (đăng ký `UtcDateTimeJsonConverter` cho `AddJsonProtocol`). |
+| 12.5 | **[NÊN]** Chạy nhiều instance thì thêm backplane Redis (`AddStackExchangeRedis`). FE giữ polling dự phòng thưa (5 phút khi đang kết nối, 30 giây khi mất kết nối). |
+| 12.6 | **[BẮT BUỘC]** Có integration test cho hub: nhận sự kiện end-to-end qua TestServer (LongPolling), JoinTicket bị từ chối khi thiếu quyền, và từ chối kết nối không có token. |
 
 ---
 
